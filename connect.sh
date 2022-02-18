@@ -1,5 +1,6 @@
 PS3="$db: "
 typeset -i numColumns
+
 function createTB
 {
 	if [ -f tables/$1 ]
@@ -9,15 +10,38 @@ function createTB
 		touch meta/$1
 		touch tables/$1
 		read -p "Enter Number Of Columns: " numColumns
-		read -p "Enter The Primary Key Name: " primaryKey
-		echo $primaryKey >> meta/$1
-		while [[ $numColumns > 1 ]]
+		isPrimaryKey=1
+		while [[ $numColumns > 0 ]]
 		do
-			read -p "Enter The Next Column Name: " columnName
-			echo $columnName >> meta/$1
+			if [[ $isPrimaryKey == "1" ]]
+			then
+				echo -n "Enter The Primary Key Name: "
+				isPrimaryKey=0
+			else
+				echo -n "Enter The Next Column Name: "
+			fi
+		
+			read columnName
+			PS3="Select Data Type: "
+			select choice in "String" "Digit"
+			do
+				case $REPLY in
+				1) 
+					columnType="String"
+					break;;
+				2)
+					columnType="Digit"
+					break;;
+				*)
+					columnType="String"
+					;;
+				esac
+			done
+			echo "$columnName,$columnType" >> meta/$1
 			numColumns=$numColumns-1
 		done	
-		echo -e "${GREEN}Table $1 created successfilly${NC}"
+		echo -e "${GREEN}Table $1 created successfully${NC}"
+		PS3="$db: "
 	fi
 }
 
@@ -36,33 +60,49 @@ function listTBs
 
 function insertTB
 {
-	columnsData=""
-	if [ -f tables/$1 ]
+
+	read -p "Enter Table Name To Insert: " tbNameIns		
+	if [ -f tables/$tbNameIns ]
 	then
-		columnsList=`cat meta/$1`
-		for column in $columnsList
-		do
-			read -p "Enter $column Data: " columnData
-			if [[ $columnsData == "" ]]
-			then
-				if [[ $columnData == "" ]]
-				then
-					echo -e "${RED}ID can not be null${NC}"
-					return
-				fi
-				if [ `cut -d, -f1 tables/$1|grep $columnData` ]
-				then
-					echo -e "${RED}Same Primary Key Data Exists${NC}"
-					return
-				else
-					columnsData="$columnData"
-				fi
-			else
-				columnsData="$columnsData,$columnData"	
-			fi
-		done
-		echo "$columnsData" >> tables/$1
-		echo -e "${GREEN}Data Inserted Successfully${NC}"
+		read -p "Enter Primary Key Data: " primaryKeyData
+		if [[ $primaryKeyData == "" ]]
+		then
+			echo -e "${RED}ID can not be null${NC}"
+			return
+		fi
+		if [ `cut -d, -f1 tables/$tbNameIns|grep $primaryKeyData` ]
+		then
+			echo -e "${RED}Same Primary Key Data Exists${NC}"
+			return
+		fi
+		awk -v tableName=$tbNameIns -v primary=$primaryKeyData 'BEGIN{FS=","; columnsData=primary; errflag=0;}
+		{	
+			if (NR == 1){
+			columnData=primary
+		}	
+		else{
+			print "Enter "$1" Data with type "$2;
+			getline columnData < "/dev/stdin";
+		}
+		if ($2 == "String" && columnData !~ /[A-Za-z]+[0-9]*/) {
+			print "\033[31mInvalid Data Type expected String\033[0m";
+			errflag=1;
+			exit 1;
+		}  
+		if ($2 == "Digit" && columnData !~ /[0-9]+/){
+			print "\033[31mInvalid Data Type expected Digit\033[0m";
+			errflag=1;
+			exit 1;
+		}
+		if (NR > 1){	
+		columnsData=columnsData","columnData;
+		}
+		}
+		END{if (errflag== 0){
+		print columnsData >> "tables/"tableName;
+		print "\033[32mRow Inserted Successfully\033[0m";
+		}
+		}' meta/$tbNameIns	
 	else
 		echo -e "${RED}Table $1 does not exist${NC}"
 	fi
@@ -102,7 +142,7 @@ function selectRow
 	if [ -f tables/$tbNameSelRow ]
 	then
 		read -p "Enter Primary Key: " primaryKeySel
-		colList=`cat meta/$tbNameSelRow`
+		colList=`cut -d, -f1 meta/$tbNameSelRow`
 		for col in $colList
 		do
 			echo -n -e  "${CYAN}$col\t\t${NC}"
@@ -142,8 +182,8 @@ do
 			listTBs
 			if [[ $tbList != "" ]]
 			then
-				read -p "Enter Table Name To Insert: " tbNameIns	
-				insertTB $tbNameIns
+				#read -p "Enter Table Name To Insert: " tbNameIns	
+				insertTB
 			fi
 			break;;
 		5)

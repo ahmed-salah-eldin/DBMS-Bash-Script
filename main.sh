@@ -86,7 +86,6 @@ do
 			break;;
 		5)
 			break 2;;
-	
 		esac
 	done	
 done
